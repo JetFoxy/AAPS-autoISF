@@ -285,7 +285,7 @@ open class OpenAPSAutoISFPlugin(
             )
             aapsLogger.debug(LTag.APS, "ActivityClass: $activityClass steps15m=$recentSteps15Minutes hr=$avgHrForActivity")
 
-            if (useActivityTargetOffset && activityClass.targetBgOffsetMgdl > 0.0 && !isTempTarget) {
+            if (useActivityTargetOffset && activityClass.targetBgOffsetMgdl > 0.0) {
                 targetBg = (targetBg + activityClass.targetBgOffsetMgdl).coerceAtMost(180.0)
                 minBg = (minBg + activityClass.targetBgOffsetMgdl).coerceAtMost(180.0)
                 maxBg = (maxBg + activityClass.targetBgOffsetMgdl).coerceAtMost(180.0)
@@ -700,28 +700,13 @@ open class OpenAPSAutoISFPlugin(
         } else {
             sensitivityRatio = autosensRatioOfRun
         }
-        var skipWeights = false
         if (!usingDynamicIsf() || !autoIsfWeights || glucose_status == null) {
             consoleError.add("autoISF weights disabled in Preferences")
-            skipWeights = true
-        }
-        if (skipWeights) {
             consoleError.add("----------------------------------")
             consoleError.add("end AutoISF")
             consoleError.add("----------------------------------")
             return round(sens / sensitivityRatio, 1)
         }
-        if (glucose_status == null) return round(sens / sensitivityRatio, 1)
-        val autosensResult = AutosensResult()
-
-        if (constraintsChecker.isAutosensModeEnabled().value()) {
-            val autosensData = iobCobCalculator.getLastAutosensDataWithWaitForCalculationFinish("OpenAPSAutoISFPlugin")
-            if (autosensData == null) {
-                rxBus.send(EventResetOpenAPSGui(rh.gs(ApsStrings.openaps_no_as_data)))
-                return sens
-            }
-            autosensData.autosensResult
-        } else autosensResult.sensResult = "autosens disabled"
 
         val dura05: Double = glucose_status.duraISFminutes
         val avg05: Double = glucose_status.duraISFaverage

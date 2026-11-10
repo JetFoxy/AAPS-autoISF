@@ -13,9 +13,14 @@ import app.aaps.core.keys.IntKey
 import app.aaps.core.keys.UnitDoubleKey
 import app.aaps.shared.tests.TestBaseWithProfile
 import com.google.common.truth.Truth.assertThat
+import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.BeforeEach
 import org.junit.jupiter.api.Test
 import org.mockito.Mock
+import org.mockito.kotlin.any
+import org.mockito.kotlin.mock
+import org.mockito.kotlin.never
+import org.mockito.kotlin.verify
 import org.mockito.kotlin.whenever
 
 class OpenAPSAutoISFPluginTest : TestBaseWithProfile() {
@@ -28,12 +33,54 @@ class OpenAPSAutoISFPluginTest : TestBaseWithProfile() {
     private lateinit var openAPSAutoISFPlugin: OpenAPSAutoISFPlugin
 
     @BeforeEach fun prepare() {
-        openAPSAutoISFPlugin = OpenAPSAutoISFPlugin(
+        openAPSAutoISFPlugin = createPlugin()
+    }
+
+    private fun createPlugin(
+        calculator: GlucoseStatusCalculatorAutoIsf = GlucoseStatusCalculatorAutoIsf(aapsLogger, iobCobCalculator, dateUtil, deltaCalculator)
+    ): OpenAPSAutoISFPlugin =
+        OpenAPSAutoISFPlugin(
             aapsLogger, rxBus, constraintChecker, rh, profileFunction, profileUtil, config, activePlugin,
             iobCobCalculator, hardLimits, preferences, dateUtil, processedTbrEbData, persistenceLayer, glucoseStatusProvider,
-            bgQualityCheck, notificationManager, determineBasalSMB,
-            GlucoseStatusCalculatorAutoIsf(aapsLogger, iobCobCalculator, dateUtil, deltaCalculator), { apsResultProvider() }, ch
+            bgQualityCheck, notificationManager, determineBasalSMB, calculator, { apsResultProvider() }, ch
         )
+
+    @Test
+    fun `autoISF with the run ratio does not read autosens again`() = runBlocking<Unit> {
+        whenever(preferences.get(BooleanKey.ApsUseAutoIsfWeights)).thenReturn(true)
+        whenever(iobCobCalculator.ads).thenReturn(mock())
+        val calculator = mock<GlucoseStatusCalculatorAutoIsf>()
+        whenever(calculator.getGlucoseStatusData(false)).thenReturn(GlucoseStatusAutoIsf(glucose = 90.0))
+
+        val result = createPlugin(calculator).autoISF(effectiveProfile, autosensRatio = 0.8)
+
+        assertThat(result).isWithin(0.05).of(effectiveProfile.getProfileIsfMgdl() / 0.8)
+        verify(iobCobCalculator, never()).getLastAutosensDataWithWaitForCalculationFinish(any())
+    }
+
+    @Test
+    fun `autoISF without glucose status keeps the early return without reading autosens`() = runBlocking<Unit> {
+        whenever(preferences.get(BooleanKey.ApsUseAutoIsfWeights)).thenReturn(true)
+        val calculator = mock<GlucoseStatusCalculatorAutoIsf>()
+        whenever(calculator.getGlucoseStatusData(false)).thenReturn(null)
+        val plugin = createPlugin(calculator)
+
+        val result = plugin.autoISF(effectiveProfile, autosensRatio = 0.8)
+
+        assertThat(result).isEqualTo(plugin.round(effectiveProfile.getProfileIsfMgdl() / 0.8, 1))
+        verify(iobCobCalculator, never()).getLastAutosensDataWithWaitForCalculationFinish(any())
+    }
+
+    @Test
+    fun `autoISF with weights off keeps the supplied ratio without reading autosens`() = runBlocking<Unit> {
+        whenever(preferences.get(BooleanKey.ApsUseAutoIsfWeights)).thenReturn(false)
+        val calculator = mock<GlucoseStatusCalculatorAutoIsf>()
+        whenever(calculator.getGlucoseStatusData(false)).thenReturn(GlucoseStatusAutoIsf(glucose = 90.0))
+
+        val result = createPlugin(calculator).autoISF(effectiveProfile, autosensRatio = 0.8)
+
+        assertThat(result).isWithin(0.05).of(effectiveProfile.getProfileIsfMgdl() / 0.8)
+        verify(iobCobCalculator, never()).getLastAutosensDataWithWaitForCalculationFinish(any())
     }
 
     @Test
