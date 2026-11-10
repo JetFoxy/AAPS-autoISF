@@ -48,13 +48,28 @@ class OpenAPSAutoISFPluginTest : TestBaseWithProfile() {
     @Test
     fun `autoISF with the run ratio does not read autosens again`() = runBlocking<Unit> {
         whenever(preferences.get(BooleanKey.ApsUseAutoIsfWeights)).thenReturn(true)
+        whenever(preferences.get(DoubleKey.ApsAutoIsfMin)).thenReturn(0.7)
+        whenever(preferences.get(DoubleKey.ApsAutoIsfMax)).thenReturn(1.5)
+        whenever(preferences.get(DoubleKey.ApsAutoIsfBgAccelWeight)).thenReturn(2.0)
+        whenever(preferences.get(DoubleKey.ApsAutoIsfBgBrakeWeight)).thenReturn(4.0)
         whenever(iobCobCalculator.ads).thenReturn(mock())
         val calculator = mock<GlucoseStatusCalculatorAutoIsf>()
-        whenever(calculator.getGlucoseStatusData(false)).thenReturn(GlucoseStatusAutoIsf(glucose = 90.0))
+        whenever(calculator.getGlucoseStatusData(false)).thenReturn(
+            GlucoseStatusAutoIsf(
+                glucose = 90.0,
+                bgAcceleration = 6.0,
+                a0 = 90.3,
+                a1 = 2.0,
+                a2 = 3.0,
+                corrSqu = 0.95
+            )
+        )
+        val plugin = createPlugin(calculator)
 
-        val result = createPlugin(calculator).autoISF(effectiveProfile, autosensRatio = 0.8)
+        val result = plugin.autoISF(effectiveProfile, autosensRatio = 0.8)
 
-        assertThat(result).isWithin(0.05).of(effectiveProfile.getProfileIsfMgdl() / 0.8)
+        assertThat(result).isEqualTo(plugin.round(effectiveProfile.getProfileIsfMgdl() / 1.5, 1))
+        assertThat(result).isNotEqualTo(plugin.round(effectiveProfile.getProfileIsfMgdl() / 0.8, 1))
         verify(iobCobCalculator, never()).getLastAutosensDataWithWaitForCalculationFinish(any())
     }
 

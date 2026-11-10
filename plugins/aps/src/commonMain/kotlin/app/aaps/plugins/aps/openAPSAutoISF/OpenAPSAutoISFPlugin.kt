@@ -700,7 +700,7 @@ open class OpenAPSAutoISFPlugin(
         } else {
             sensitivityRatio = autosensRatioOfRun
         }
-        if (!usingDynamicIsf() || !autoIsfWeights || glucose_status == null) {
+        if (!autoIsfWeights || glucose_status == null) {
             consoleError.add("autoISF weights disabled in Preferences")
             consoleError.add("----------------------------------")
             consoleError.add("end AutoISF")
