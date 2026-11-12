@@ -65,6 +65,59 @@ class ActivityFusionTest {
         assertThat(classify(readings, steps15m = 5, stressDetection = false)).isEqualTo(ActivityClass.RESISTANCE)
     }
 
+    @Test fun `classifyWithHr carries the hr classification for guards`() {
+        val readings = listOf(hr(110.0, minutesAgo = 1))
+        val result = ActivityFusion.classifyWithHr(
+            hrReadings = readings,
+            nowMillis = now,
+            hrWindowMinutes = 15,
+            hrMax = 180,
+            hrResting = 60,
+            steps15m = 400,
+            phoneActivity = ActivityClassifier.PHONE_STILL,
+            stressDetection = false,
+            aapsLogger = null
+        )
+        assertThat(result.activityClass).isEqualTo(ActivityClass.VIGOROUS_AEROBIC)
+        assertThat(result.hrResult).isNotNull()
+        assertThat(result.hrResult!!.hrZone).isEqualTo(HrActivityCalculator.HrZone.ZONE_3_MODERATE)
+    }
+
+    @Test fun `classifyWithHr has no hr result on the legacy path`() {
+        val result = ActivityFusion.classifyWithHr(
+            hrReadings = emptyList(),
+            nowMillis = now,
+            hrWindowMinutes = 15,
+            hrMax = 180,
+            hrResting = 60,
+            steps15m = 10,
+            phoneActivity = ActivityClassifier.PHONE_STILL,
+            stressDetection = false,
+            aapsLogger = null
+        )
+        assertThat(result.activityClass).isEqualTo(ActivityClass.REST)
+        assertThat(result.hrResult).isNull()
+    }
+
+    @Test fun `classifyActivity delegates to classifyWithHr`() {
+        val readings = listOf(hr(110.0, minutesAgo = 1))
+        assertThat(
+            classify(readings, steps15m = 400)
+        ).isEqualTo(
+            ActivityFusion.classifyWithHr(
+                hrReadings = readings,
+                nowMillis = now,
+                hrWindowMinutes = 15,
+                hrMax = 180,
+                hrResting = 60,
+                steps15m = 400,
+                phoneActivity = ActivityClassifier.PHONE_STILL,
+                stressDetection = false,
+                aapsLogger = null
+            ).activityClass
+        )
+    }
+
     @Test fun `brisk walking hr fuses into graded aerobic`() {
         val readings = listOf(hr(110.0, minutesAgo = 1))
         assertThat(classify(readings, steps15m = 400)).isEqualTo(ActivityClass.VIGOROUS_AEROBIC)

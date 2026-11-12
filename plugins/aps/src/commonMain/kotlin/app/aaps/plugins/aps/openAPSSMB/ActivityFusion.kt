@@ -17,6 +17,12 @@ import app.aaps.core.interfaces.logging.AAPSLogger
  */
 object ActivityFusion {
 
+    data class FusionResult(
+        val activityClass: ActivityClass,
+        /** Populated when the classification came from HR fusion; null on the legacy path. */
+        val hrResult: HrActivityCalculator.HrClassificationResult?
+    )
+
     fun classifyActivity(
         hrReadings: List<HR>,
         nowMillis: Long,
@@ -27,22 +33,39 @@ object ActivityFusion {
         phoneActivity: Int,
         stressDetection: Boolean,
         aapsLogger: AAPSLogger?
-    ): ActivityClass {
+    ): ActivityClass = classifyWithHr(
+        hrReadings, nowMillis, hrWindowMinutes, hrMax, hrResting, steps15m, phoneActivity, stressDetection, aapsLogger
+    ).activityClass
+
+    fun classifyWithHr(
+        hrReadings: List<HR>,
+        nowMillis: Long,
+        hrWindowMinutes: Int,
+        hrMax: Int,
+        hrResting: Int,
+        steps15m: Int,
+        phoneActivity: Int,
+        stressDetection: Boolean,
+        aapsLogger: AAPSLogger?
+    ): FusionResult {
         if (phoneActivity == ActivityClassifier.PHONE_BICYCLE ||
             phoneActivity == ActivityClassifier.PHONE_WALKING ||
             phoneActivity == ActivityClassifier.PHONE_RUNNING
         ) {
-            return ActivityClass.AEROBIC
+            return FusionResult(ActivityClass.AEROBIC, null)
         }
 
         val hrUsable = HrActivityCalculator.averageHrInWindow(hrReadings, nowMillis, hrWindowMinutes) != null &&
             !HrActivityCalculator.isHrWindowFrozen(hrReadings, nowMillis, hrWindowMinutes)
         if (!hrUsable) {
-            return ActivityClassifier.classify(
-                steps15m = steps15m,
-                avgHrLast15m = 0.0,
-                phoneActivity = phoneActivity,
-                restingHr = hrResting
+            return FusionResult(
+                ActivityClassifier.classify(
+                    steps15m = steps15m,
+                    avgHrLast15m = 0.0,
+                    phoneActivity = phoneActivity,
+                    restingHr = hrResting
+                ),
+                null
             )
         }
 
@@ -56,6 +79,6 @@ object ActivityFusion {
             stressDetection = stressDetection,
             aapsLogger = aapsLogger
         )
-        return ActivityClass.fromHrState(result.exerciseState, stressDetection)
+        return FusionResult(ActivityClass.fromHrState(result.exerciseState, stressDetection), result)
     }
 }
