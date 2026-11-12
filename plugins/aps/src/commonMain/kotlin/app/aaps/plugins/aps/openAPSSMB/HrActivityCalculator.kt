@@ -4,6 +4,8 @@ import app.aaps.core.data.model.HR
 import app.aaps.core.interfaces.logging.AAPSLogger
 import app.aaps.core.interfaces.logging.LTag
 
+import kotlin.math.roundToInt
+
 /**
  * Classifies exercise type by combining Karvonen Heart Rate Reserve (HRR%) zones
  * with step count signals from [StepService].
@@ -81,6 +83,8 @@ object HrActivityCalculator {
 
     private const val FROZEN_MIN_READINGS = 4
 
+    private fun format1(value: Double): String = "${(value * 10).roundToInt() / 10.0}"
+
     /**
      * True when the HR window holds enough readings that are ALL bit-identical — the signature of a
      * stuck sensor value, NOT a heartbeat. Used to reject a phantom elevated HR that would otherwise
@@ -157,7 +161,7 @@ object HrActivityCalculator {
         // evidence of rest and is withheld when the classification is unavailable
         // (see [inactivityRaiseBlockedByHr]).
         if (isHrWindowFrozen(hrReadings, nowMillis, hrWindowMinutes)) {
-            debug.append("HR: frozen value ${"%.1f".format(avgBpm)} bpm across ${hrWindowMinutes}m window (stuck sensor?) — treating as unavailable")
+            debug.append("HR: frozen value ${format1(avgBpm)} bpm across ${hrWindowMinutes}m window (stuck sensor?) — treating as unavailable")
             aapsLogger?.debug(LTag.APS, "HrActivityCalculator: $debug")
             return HrClassificationResult(
                 exerciseState = ExerciseState.RESTING,
@@ -172,7 +176,7 @@ object HrActivityCalculator {
         val hrrPct = ((avgBpm - hrResting) / (hrMax - hrResting).coerceAtLeast(1)) * 100.0
         val zone = classifyZone(avgBpm, hrMax, hrResting)
 
-        debug.append("HR: avg=${"%.1f".format(avgBpm)} bpm | HRR=${"%.1f".format(hrrPct)}% | zone=${zone.label}")
+        debug.append("HR: avg=${format1(avgBpm)} bpm | HRR=${format1(hrrPct)}% | zone=${zone.label}")
         debug.append(" | steps15m=$stepsLast15Min")
 
         aapsLogger?.debug(LTag.APS, "HrActivityCalculator: $debug")
