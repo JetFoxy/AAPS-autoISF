@@ -62,7 +62,6 @@ import app.aaps.plugins.aps.openAPSSMB.PhoneMovementDetector
 import app.aaps.plugins.aps.openAPSSMB.ActivityClass
 import app.aaps.plugins.aps.openAPSSMB.ActivityClassifier
 import app.aaps.plugins.aps.openAPSSMB.ActivityFusion
-import app.aaps.plugins.aps.openAPSSMB.HrActivityCalculator
 import app.aaps.plugins.aps.openAPSSMB.StepService
 import app.aaps.plugins.aps.events.EventOpenAPSUpdateGui
 import app.aaps.plugins.aps.events.EventResetOpenAPSGui
@@ -305,11 +304,11 @@ open class OpenAPSAutoISFPlugin(
             // same ratio as full step activity. The ratio is then capped by autosens (activitySensitivityRatio).
             // STRESS is deliberately not step activity: elevated HR without movement, opposite insulin direction.
             stepActivityDetected = activityClass.isAerobic || activityRatio < 1
-            // INACTIVE from HR fusion may only mark inactivity when the HR guards allow the
-            // insulin-adding raise: no elevated zone, and a usable HR at all (fail closed).
+            // The insulin-adding raise keys on the HR zone directly (not on the class label): on the HR-fusion
+            // path any zone >= 2 blocks it, and so does an unavailable HR — the legacy fallback path (no HR
+            // result) keeps the raise, exactly as before HR fusion existed.
             stepInactivityDetected = !stepActivityDetected && activityClass.isRestLike && activityRatio > 1 &&
-                !(activityClass == ActivityClass.INACTIVE &&
-                    HrActivityCalculator.inactivityRaiseBlockedByHr(fusionResult.hrResult))
+                ActivityFusion.inactivityRaiseAllowed(fusionResult)
             if (activityClass.isAerobic && activityRatio >= 1) {
                 activityRatio = defaultActivityRatio(preferences.get(DoubleKey.ActivityScaleFactor))
                 preferences.put(DoubleKey.ActivityMonitorRatio, activityRatio)

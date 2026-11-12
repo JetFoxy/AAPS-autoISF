@@ -118,6 +118,37 @@ class ActivityFusionTest {
         )
     }
 
+    @Test fun `inactivity raise is allowed for a legacy rest with no hr result`() {
+        val legacyRest = ActivityFusion.FusionResult(ActivityClass.REST, hrResult = null)
+        assertThat(ActivityFusion.inactivityRaiseAllowed(legacyRest)).isTrue()
+    }
+
+    @Test fun `inactivity raise is blocked when hr fusion read an elevated zone`() {
+        val readings = listOf(hr(100.0, minutesAgo = 1))
+        val zone2Rest = ActivityFusion.classifyWithHr(
+            hrReadings = readings, nowMillis = now, hrWindowMinutes = 15, hrMax = 180, hrResting = 60,
+            steps15m = 10, phoneActivity = ActivityClassifier.PHONE_STILL, stressDetection = false, aapsLogger = null
+        )
+        assertThat(zone2Rest.activityClass).isEqualTo(ActivityClass.REST)
+        assertThat(zone2Rest.hrResult!!.hrZone).isEqualTo(HrActivityCalculator.HrZone.ZONE_2_LIGHT)
+        assertThat(ActivityFusion.inactivityRaiseAllowed(zone2Rest)).isFalse()
+    }
+
+    @Test fun `inactivity raise is allowed for a genuine zone one inactive`() {
+        val zone1Inactive = ActivityFusion.classifyWithHr(
+            hrReadings = listOf(hr(65.0, minutesAgo = 1)), nowMillis = now, hrWindowMinutes = 15, hrMax = 180, hrResting = 60,
+            steps15m = 10, phoneActivity = ActivityClassifier.PHONE_STILL, stressDetection = false, aapsLogger = null
+        )
+        assertThat(zone1Inactive.activityClass).isEqualTo(ActivityClass.INACTIVE)
+        assertThat(ActivityFusion.inactivityRaiseAllowed(zone1Inactive)).isTrue()
+    }
+
+    @Test fun `nan hr average falls back to legacy rules instead of a phantom zone`() {
+        val nanReadings = listOf(hr(Double.NaN), hr(Double.NaN), hr(Double.NaN), hr(Double.NaN))
+        assertThat(classify(nanReadings, steps15m = 400)).isEqualTo(ActivityClass.AEROBIC)
+        assertThat(classify(nanReadings, steps15m = 10)).isEqualTo(ActivityClass.REST)
+    }
+
     @Test fun `brisk walking hr fuses into graded aerobic`() {
         val readings = listOf(hr(110.0, minutesAgo = 1))
         assertThat(classify(readings, steps15m = 400)).isEqualTo(ActivityClass.VIGOROUS_AEROBIC)

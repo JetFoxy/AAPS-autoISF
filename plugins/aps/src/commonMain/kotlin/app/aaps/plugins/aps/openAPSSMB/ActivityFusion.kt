@@ -23,6 +23,16 @@ object ActivityFusion {
         val hrResult: HrActivityCalculator.HrClassificationResult?
     )
 
+    /**
+     * Whether the insulin-adding inactivity raise may fire for this classification. The raise is
+     * allowed on the legacy path (no HR evidence was claimed) and for a genuine zone-1 INACTIVE;
+     * it is blocked whenever HR fusion produced a result whose zone says otherwise (zone >= 2,
+     * or an unavailable classification). Keys on the HR zone directly, so it holds even if the
+     * fused exerciseState is wrong — the same invariant Boost applies.
+     */
+    fun inactivityRaiseAllowed(result: FusionResult): Boolean =
+        !(result.hrResult != null && HrActivityCalculator.inactivityRaiseBlockedByHr(result.hrResult))
+
     fun classifyActivity(
         hrReadings: List<HR>,
         nowMillis: Long,
@@ -55,7 +65,10 @@ object ActivityFusion {
             return FusionResult(ActivityClass.AEROBIC, null)
         }
 
-        val hrUsable = HrActivityCalculator.averageHrInWindow(hrReadings, nowMillis, hrWindowMinutes) != null &&
+        val avgHr = HrActivityCalculator.averageHrInWindow(hrReadings, nowMillis, hrWindowMinutes)
+        // Non-finite average is garbage data, not "no HR" and not "elevated HR": fall back to the
+        // legacy step rules rather than letting NaN classify as an extreme zone.
+        val hrUsable = avgHr != null && avgHr.isFinite() &&
             !HrActivityCalculator.isHrWindowFrozen(hrReadings, nowMillis, hrWindowMinutes)
         if (!hrUsable) {
             return FusionResult(
